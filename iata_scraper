@@ -1,0 +1,53 @@
+from bs4 import BeautifulSoup
+import pandas as pd
+from legacy_ssl import get_legacy_session
+
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
+}
+
+counter = 0
+
+columns = ['airport', 'type', 'city', 'country', 'iata', 'icao', 'faa']
+df = pd.DataFrame(columns=columns)
+
+letters_a_to_z = []
+for letter in range(ord('a'), ord('z') + 1):
+    letters_a_to_z.append(chr(letter))
+
+for letter in letters_a_to_z:
+    url = f"https://www.world-airport-codes.com/alphabetical/airport-code/{letter}.html?page=1"
+    response = get_legacy_session().get(url, headers=headers)
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    pagination_element = soup.find('nav', class_='pagination small-12 columns')
+
+    if pagination_element:
+        anchor_tags = pagination_element.find_all('a')
+        number_of_anchor_tags = len(anchor_tags)
+        
+        for page in range(number_of_anchor_tags):
+            url = f"https://www.world-airport-codes.com/alphabetical/airport-code/{letter}.html?page={page + 1}"
+            response = get_legacy_session().get(url, headers=headers)
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            counter += 1
+            print(counter)
+            
+            data_table = soup.find('table', class_='stack2')
+            table_body = data_table.find('tbody')
+            table_rows = table_body.find_all('tr')
+
+            for row in table_rows:
+                data_entry = [
+                        ele.text.strip().split()[1] 
+                        if ":" in ele.text.strip() 
+                        else ele.text.strip() 
+                        for ele in row.find_all(['th', 'td'])
+                    ]
+                df.loc[len(df)] = data_entry
+
+df.to_csv('airports.csv', index=False)
+
+print(df)
